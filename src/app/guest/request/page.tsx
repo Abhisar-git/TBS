@@ -1,14 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { DELHI_LOCATIONS } from '@/lib/maps/locations';
-import type { RideRequest } from '@/types';
-import { Clock, AlertCircle, Sparkles } from 'lucide-react';
+import type { RideRequest, GuestProfile } from '@/types';
+import { Clock, AlertCircle, Users, Briefcase } from 'lucide-react';
 
 export default function GuestRequestPage() {
-  const router = useRouter();
   const { token } = useAuth('GUEST');
   const [pendingRequest, setPendingRequest] = useState<RideRequest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -18,17 +16,26 @@ export default function GuestRequestPage() {
   // Form State
   const [pickupPoint, setPickupPoint] = useState(DELHI_LOCATIONS.airport.address);
   const [dropoffPoint, setDropoffPoint] = useState(DELHI_LOCATIONS.accommodations[0].address);
+  const [groupSize, setGroupSize] = useState(1);
+  const [luggageCount, setLuggageCount] = useState(1);
 
   const fetchExistingRequests = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/ride-requests', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success && data.data) {
-        const pending = data.data.find((r: RideRequest) => r.status === 'PENDING');
+      const [rRes, gRes] = await Promise.all([
+        fetch('/api/ride-requests', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/guests', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const [rData, gData] = await Promise.all([rRes.json(), gRes.json()]);
+
+      if (rData.success && rData.data) {
+        const pending = rData.data.find((r: RideRequest) => r.status === 'PENDING');
         setPendingRequest(pending || null);
+      }
+      if (gData.success && gData.data) {
+        const profile: GuestProfile = gData.data;
+        if (profile.groupSize) setGroupSize(profile.groupSize);
+        if (profile.luggageCount) setLuggageCount(profile.luggageCount);
       }
     } catch {
       // Ignore network error
@@ -57,6 +64,8 @@ export default function GuestRequestPage() {
         body: JSON.stringify({
           pickupPoint,
           dropoffPoint,
+          groupSize,
+          luggageCount,
         }),
       });
 
@@ -89,7 +98,7 @@ export default function GuestRequestPage() {
         </span>
         <h1 className="font-serif text-2xl text-charcoal-800">Request On-Demand Ride</h1>
         <p className="text-xs text-charcoal-400 leading-relaxed font-sans">
-          Need an unscheduled transfer? Submit your request for instant dispatch review.
+          Need an unscheduled transfer? Enter your party details and location for instant dispatch review.
         </p>
       </div>
 
@@ -125,6 +134,21 @@ export default function GuestRequestPage() {
             <div className="space-y-1">
               <span className="label-editorial">Dropoff Destination</span>
               <p className="text-charcoal-700 font-medium text-sm">{pendingRequest.dropoffPoint}</p>
+            </div>
+            <div className="divider-editorial !my-2" />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="label-editorial">Party Size</span>
+                <p className="text-charcoal-800 font-medium text-sm">
+                  {pendingRequest.guestProfile?.groupSize || groupSize} { (pendingRequest.guestProfile?.groupSize || groupSize) === 1 ? 'Person' : 'People' }
+                </p>
+              </div>
+              <div>
+                <span className="label-editorial">Luggage</span>
+                <p className="text-charcoal-800 font-medium text-sm">
+                  {pendingRequest.guestProfile?.luggageCount || luggageCount} Bags
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -169,6 +193,54 @@ export default function GuestRequestPage() {
                 {DELHI_LOCATIONS.venue.name}
               </option>
             </select>
+          </div>
+
+          {/* Party Size & Luggage Entry */}
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-black/[0.04]">
+            <div>
+              <label className="label-editorial flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-gold-500" />
+                <span>Party Size</span>
+              </label>
+              <select
+                value={groupSize}
+                onChange={(e) => setGroupSize(parseInt(e.target.value) || 1)}
+                className="select-editorial mt-1"
+              >
+                <option value={1}>1 Person (Solo)</option>
+                <option value={2}>2 People (+1 Companion)</option>
+                <option value={3}>3 People (+2 Companions)</option>
+                <option value={4}>4 People (+3 Companions)</option>
+                <option value={5}>5 People (+4 Companions)</option>
+                <option value={6}>6 People (+5 Companions)</option>
+                <option value={7}>7+ Group</option>
+              </select>
+              <span className="text-[10px] text-charcoal-400 font-sans mt-1 block">
+                Total passengers requiring seats
+              </span>
+            </div>
+
+            <div>
+              <label className="label-editorial flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-gold-500" />
+                <span>Luggage Count</span>
+              </label>
+              <select
+                value={luggageCount}
+                onChange={(e) => setLuggageCount(parseInt(e.target.value) || 0)}
+                className="select-editorial mt-1"
+              >
+                <option value={0}>0 Bags (Hand-carry)</option>
+                <option value={1}>1 Bag</option>
+                <option value={2}>2 Bags</option>
+                <option value={3}>3 Bags</option>
+                <option value={4}>4 Bags</option>
+                <option value={5}>5+ Bags</option>
+              </select>
+              <span className="text-[10px] text-charcoal-400 font-sans mt-1 block">
+                Luggage / suitcases
+              </span>
+            </div>
           </div>
 
           <button

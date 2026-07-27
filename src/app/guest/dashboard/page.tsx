@@ -4,13 +4,17 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import type { Trip, GuestProfile } from '@/types';
-import { Car, ArrowRight, PlusCircle, User, Sparkles, MapPin } from 'lucide-react';
+import { Car, ArrowRight, PlusCircle, User, Users, Briefcase, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function GuestDashboard() {
   const { user, token } = useAuth('GUEST');
   const [profile, setProfile] = useState<GuestProfile | null>(null);
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingParty, setUpdatingParty] = useState(false);
+  const [partySizeInput, setPartySizeInput] = useState(1);
+  const [luggageInput, setLuggageInput] = useState(1);
+  const [updateMsg, setUpdateMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchGuestData = useCallback(async () => {
     if (!token) return;
@@ -21,7 +25,11 @@ export default function GuestDashboard() {
       ]);
       const [gData, tData] = await Promise.all([gRes.json(), tRes.json()]);
 
-      if (gData.success && gData.data) setProfile(gData.data);
+      if (gData.success && gData.data) {
+        setProfile(gData.data);
+        if (gData.data.groupSize) setPartySizeInput(gData.data.groupSize);
+        if (gData.data.luggageCount) setLuggageInput(gData.data.luggageCount);
+      }
       if (tData.success && tData.data) {
         const active = tData.data.find((t: Trip) =>
           ['DRIVER_ASSIGNED', 'DRIVER_EN_ROUTE', 'DRIVER_ARRIVED', 'IN_PROGRESS'].includes(t.status)
@@ -38,6 +46,38 @@ export default function GuestDashboard() {
   useEffect(() => {
     fetchGuestData();
   }, [fetchGuestData]);
+
+  const handleUpdateParty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || !token) return;
+    setUpdatingParty(true);
+    setUpdateMsg(null);
+
+    try {
+      const res = await fetch(`/api/guests/${profile.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          groupSize: partySizeInput,
+          luggageCount: luggageInput,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProfile(data.data);
+        setUpdateMsg({ type: 'success', text: 'Accompanying party updated successfully!' });
+      } else {
+        setUpdateMsg({ type: 'error', text: data.error || 'Failed to update party size' });
+      }
+    } catch {
+      setUpdateMsg({ type: 'error', text: 'Network error updating party size' });
+    } finally {
+      setUpdatingParty(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -111,6 +151,82 @@ export default function GuestDashboard() {
             Your assigned chauffeur will appear here upon dispatch. You can also request an on-demand transfer below.
           </p>
         )}
+      </div>
+
+      {/* Arrival Party & Companions Quick Form */}
+      <div className="card-editorial space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-gold-50 flex items-center justify-center border border-gold-200/40">
+              <Users className="w-4.5 h-4.5 text-gold-600" />
+            </div>
+            <div>
+              <h2 className="font-serif text-lg text-charcoal-800">Accompanying Party</h2>
+              <p className="text-[11px] text-charcoal-400 font-sans">Arriving with family or guests?</p>
+            </div>
+          </div>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ivory-100 text-charcoal-700 border border-black/[0.04]">
+            {profile?.groupSize || 1} {(profile?.groupSize || 1) === 1 ? 'Person' : 'People'}
+          </span>
+        </div>
+
+        {updateMsg && (
+          <div
+            className={`px-4 py-3 rounded-xl text-xs flex items-center gap-2 ${
+              updateMsg.type === 'success'
+                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50'
+                : 'bg-blush-50 text-blush-500 border border-blush-200/50'
+            }`}
+          >
+            {updateMsg.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            <span>{updateMsg.text}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleUpdateParty} className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label-editorial text-[10px] block mb-1">Total People (Self + Party)</label>
+              <select
+                value={partySizeInput}
+                onChange={(e) => setPartySizeInput(parseInt(e.target.value) || 1)}
+                className="select-editorial text-xs py-2"
+              >
+                <option value={1}>1 Person (Solo)</option>
+                <option value={2}>2 People (+1 Companion)</option>
+                <option value={3}>3 People (+2 Companions)</option>
+                <option value={4}>4 People (+3 Companions)</option>
+                <option value={5}>5 People (+4 Companions)</option>
+                <option value={6}>6 People (+5 Companions)</option>
+                <option value={7}>7+ Group</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label-editorial text-[10px] block mb-1">Luggage Bags</label>
+              <select
+                value={luggageInput}
+                onChange={(e) => setLuggageInput(parseInt(e.target.value) || 0)}
+                className="select-editorial text-xs py-2"
+              >
+                <option value={0}>0 Bags</option>
+                <option value={1}>1 Bag</option>
+                <option value={2}>2 Bags</option>
+                <option value={3}>3 Bags</option>
+                <option value={4}>4 Bags</option>
+                <option value={5}>5+ Bags</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={updatingParty}
+            className="btn-secondary w-full text-xs py-2.5 flex items-center justify-center gap-2"
+          >
+            {updatingParty ? 'Updating Party Size...' : 'Update Accompanying Party'}
+          </button>
+        </form>
       </div>
 
       {/* Quick Actions Grid */}

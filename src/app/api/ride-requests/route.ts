@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { pickupPoint, dropoffPoint, guestProfileId } = body;
+    const { pickupPoint, dropoffPoint, guestProfileId, groupSize, luggageCount } = body;
 
     if (!pickupPoint || !dropoffPoint) {
       return NextResponse.json(
@@ -87,6 +87,20 @@ export async function POST(request: Request) {
         { success: false, error: 'Guest profile ID required' },
         { status: 400 }
       );
+    }
+
+    // Update guest profile group size & luggage count if provided
+    if (groupSize !== undefined || luggageCount !== undefined) {
+      const updateData: Record<string, number> = {};
+      if (typeof groupSize === 'number' && groupSize >= 1) updateData.groupSize = groupSize;
+      if (typeof luggageCount === 'number' && luggageCount >= 0) updateData.luggageCount = luggageCount;
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.guestProfile.update({
+          where: { id: profileId },
+          data: updateData,
+        });
+      }
     }
 
     // Check for existing pending request
