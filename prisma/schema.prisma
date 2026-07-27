@@ -1,5 +1,5 @@
 // ============================================================
-// TBS — Prisma Schema (SQLite database for local execution & Vercel)
+// TBS — Prisma Schema (PostgreSQL for Neon DB & Vercel)
 // Complete data model for the event transport dispatch system
 // ============================================================
 
@@ -8,8 +8,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ---------- User & Auth ----------
@@ -24,86 +24,66 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  guestProfile     GuestProfile?
-  driverProfile    DriverProfile?
-  approvedRequests RideRequest[] @relation("ApprovedBy")
-  notifications    Notification[]
+  guestProfile GuestProfile?
+  driverProfile DriverProfile?
+  approvedRequests RideRequest[] @relation("ApprovedByAdmin")
 
   @@map("users")
 }
 
-// ---------- Event ----------
-
-model Event {
-  id           String   @id @default(uuid())
-  name         String
-  venueAddress String   @map("venue_address")
-  venueLat     Float    @map("venue_lat")
-  venueLng     Float    @map("venue_lng")
-  eventStart   DateTime @map("event_start")
-  eventEnd     DateTime @map("event_end")
-  schedule     String   @default("[]")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@map("events")
-}
-
-// ---------- Accommodation ----------
+// ---------- Accommodations ----------
 
 model Accommodation {
-  id      String @id @default(uuid())
-  name    String
-  address String
-  lat     Float
-  lng     Float
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now()) @map("created_at")
 
   guests GuestProfile[]
 
   @@map("accommodations")
 }
 
-// ---------- Guest Profile ----------
+// ---------- Guest Profile & Travel Details ----------
 
 model GuestProfile {
-  id                  String    @id @default(uuid())
-  userId              String    @unique @map("user_id")
-  flightOrTrainNumber String?   @map("flight_or_train_number")
-  arrivalEta          DateTime? @map("arrival_eta")
-  departureEta        DateTime? @map("departure_eta")
-  pickupPoint         String    @default("") @map("pickup_point")
-  accommodationId     String?   @map("accommodation_id")
-  groupSize           Int       @default(1) @map("group_size")
-  luggageCount        Int       @default(1) @map("luggage_count")
-  status              String    @default("REGISTERED") // REGISTERED, WAITING, ASSIGNED, IN_TRANSIT, ARRIVED, DEPARTED
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  flightOrTrainNumber String?  @map("flight_or_train_number")
+  groupSize           Int      @default(1) @map("group_size")
+  luggageCount        Int      @default(1) @map("luggage_count")
+  status              String   @default("REGISTERED") // REGISTERED, WAITING, ASSIGNED, IN_TRANSIT, ARRIVED
+  pickupPoint         String?  @map("pickup_point")
+  accommodationId     String?  @map("accommodation_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accommodation  Accommodation?  @relation(fields: [accommodationId], references: [id])
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accommodation Accommodation? @relation(fields: [accommodationId], references: [id])
+  rideRequests  RideRequest[]
   tripPassengers TripPassenger[]
-  rideRequests   RideRequest[]
 
   @@map("guest_profiles")
 }
 
-// ---------- Driver Profile ----------
+// ---------- Driver Profile & Fleet Specifications ----------
 
 model DriverProfile {
-  id                    String    @id @default(uuid())
-  userId                String    @unique @map("user_id")
-  vehicleNumber         String    @map("vehicle_number")
-  vehicleModel          String    @default("") @map("vehicle_model")
-  seatCapacity          Int       @map("seat_capacity")
-  luggageCapacity       Int       @map("luggage_capacity")
-  status                String    @default("OFFLINE") // OFFLINE, AVAILABLE, EN_ROUTE, ON_TRIP, ON_BREAK, UNAVAILABLE
-  currentLat            Float?    @map("current_lat")
-  currentLng            Float?    @map("current_lng")
-  heading               Float     @default(0)
-  speed                 Float     @default(0)
-  locationUpdatedAt     DateTime? @map("location_updated_at")
-  availableAfter        DateTime? @map("available_after")
-  predictedFreeLat      Float?    @map("predicted_free_lat")
-  predictedFreeLng      Float?    @map("predicted_free_lng")
-  breakMinutesRemaining Int       @default(0) @map("break_minutes_remaining")
-  breakStartedAt        DateTime? @map("break_started_at")
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  vehicleNumber    String   @map("vehicle_number")
+  vehicleModel     String   @default("Standard Sedan") @map("vehicle_model")
+  seatCapacity     Int      @default(4) @map("seat_capacity")
+  luggageCapacity  Int      @default(3) @map("luggage_capacity")
+  status           String   @default("AVAILABLE") // AVAILABLE, EN_ROUTE, ON_TRIP, ON_BREAK, OFFLINE
+  currentLat       Float?   @map("current_lat")
+  currentLng       Float?   @map("current_lng")
+  locationUpdatedAt DateTime? @map("location_updated_at")
+  breakUntil       DateTime? @map("break_until")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   trips Trip[]
@@ -111,120 +91,78 @@ model DriverProfile {
   @@map("driver_profiles")
 }
 
-// ---------- Trip ----------
+// ---------- Ride Requests ----------
+
+model RideRequest {
+  id             String   @id @default(uuid())
+  guestProfileId String   @map("guest_profile_id")
+  pickupPoint    String   @map("pickup_point")
+  dropoffPoint   String   @map("dropoff_point")
+  status         String   @default("PENDING") // PENDING, APPROVED, DECLINED, MATCHED
+  approvedById   String?  @map("approved_by_id")
+  declineReason  String?  @map("decline_reason")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  guestProfile GuestProfile @relation(fields: [guestProfileId], references: [id], onDelete: Cascade)
+  approvedBy   User?         @relation("ApprovedByAdmin", fields: [approvedById], references: [id])
+
+  @@map("ride_requests")
+}
+
+// ---------- Trips & Assignments ----------
 
 model Trip {
-  id                   String    @id @default(uuid())
-  tripType             String    @map("trip_type") // ARRIVAL, TO_VENUE, FROM_VENUE, DEPARTURE
-  driverId             String?   @map("driver_id")
-  pickupAddress        String    @map("pickup_address")
-  pickupLat            Float     @map("pickup_lat")
-  pickupLng            Float     @map("pickup_lng")
-  dropoffAddress       String    @map("dropoff_address")
-  dropoffLat           Float     @map("dropoff_lat")
-  dropoffLng           Float     @map("dropoff_lng")
-  scheduledPickupTime  DateTime? @map("scheduled_pickup_time")
-  actualPickupTime     DateTime? @map("actual_pickup_time")
-  actualDropoffTime    DateTime? @map("actual_dropoff_time")
-  status               String    @default("PENDING") // PENDING, DRIVER_ASSIGNED, DRIVER_EN_ROUTE, DRIVER_ARRIVED, IN_PROGRESS, COMPLETED, CANCELLED
-  estimatedDurationSec Int?      @map("estimated_duration_sec")
-  actualDurationSec     Int?      @map("actual_duration_sec")
-  distanceKm           Float?    @map("distance_km")
-  routePolyline        String?   @map("route_polyline")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid())
+  tripType           String    @default("ARRIVAL") // ARRIVAL, DEPARTURE, VENUE_TRANSFER, ON_DEMAND
+  driverId           String?   @map("driver_id")
+  status             String    @default("PENDING") // PENDING, DRIVER_ASSIGNED, DRIVER_EN_ROUTE, DRIVER_ARRIVED, IN_PROGRESS, COMPLETED, CANCELLED
+  pickupAddress      String    @map("pickup_address")
+  pickupLat          Float     @map("pickup_lat")
+  pickupLng          Float     @map("pickup_lng")
+  dropoffAddress     String    @map("dropoff_address")
+  dropoffLat         Float     @map("dropoff_lat")
+  dropoffLng         Float     @map("dropoff_lng")
+  scheduledPickupAt  DateTime? @map("scheduled_pickup_at")
+  actualStartAt      DateTime? @map("actual_start_at")
+  actualEndAt        DateTime? @map("actual_end_at")
+  actualDurationSec  Int?      @map("actual_duration_sec")
+  actualDistanceM    Int?      @map("actual_distance_m")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   driver     DriverProfile?  @relation(fields: [driverId], references: [id])
   passengers TripPassenger[]
 
-  @@index([status])
-  @@index([driverId])
-  @@index([scheduledPickupTime])
   @@map("trips")
 }
 
-// ---------- Trip Passenger ----------
+// ---------- Trip Passengers (Many-to-Many Join with Status) ----------
 
 model TripPassenger {
-  id             String @id @default(uuid())
-  tripId         String @map("trip_id")
-  guestProfileId String @map("guest_profile_id")
-  boardingStatus String @default("WAITING") // WAITING, BOARDED, DROPPED_OFF, NO_SHOW
+  id             String   @id @default(uuid())
+  tripId         String   @map("trip_id")
+  guestProfileId String   @map("guest_profile_id")
+  boardingStatus String   @default("ASSIGNED") // ASSIGNED, BOARDED, DROPPED_OFF
+  createdAt      DateTime @default(now()) @map("created_at")
 
   trip         Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  guestProfile GuestProfile @relation(fields: [guestProfileId], references: [id])
+  guestProfile GuestProfile @relation(fields: [guestProfileId], references: [id], onDelete: Cascade)
 
-  @@unique([tripId, guestProfileId])
   @@map("trip_passengers")
 }
 
-// ---------- Ride Request ----------
-
-model RideRequest {
-  id             String    @id @default(uuid())
-  guestProfileId String    @map("guest_profile_id")
-  pickupPoint    String    @map("pickup_point")
-  dropoffPoint   String    @map("dropoff_point")
-  status         String    @default("PENDING") // PENDING, APPROVED, DECLINED, MATCHED, EXPIRED
-  adminNotes     String?   @map("admin_notes")
-  approvedById   String?   @map("approved_by_id")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  resolvedAt     DateTime? @map("resolved_at")
-
-  guestProfile GuestProfile @relation(fields: [guestProfileId], references: [id])
-  approvedBy   User?        @relation("ApprovedBy", fields: [approvedById], references: [id])
-
-  @@index([status])
-  @@map("ride_requests")
-}
-
-// ---------- Distance Cache ----------
+// ---------- Distance Cache (2-Tier In-Memory + DB Cache) ----------
 
 model DistanceCache {
-  id                   String   @id @default(uuid())
-  originHash           String   @map("origin_hash")
-  destHash             String   @map("dest_hash")
-  durationSec          Int      @map("duration_sec")
-  distanceM            Int      @map("distance_m")
-  durationInTrafficSec Int?     @map("duration_in_traffic_sec")
-  fetchedAt            DateTime @default(now()) @map("fetched_at")
-  expiresAt            DateTime @map("expires_at")
+  id          String   @id @default(uuid())
+  originHash  String   @map("origin_hash")
+  destHash    String   @map("dest_hash")
+  durationSec Int      @map("duration_sec")
+  distanceM   Int      @map("distance_m")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@unique([originHash, destHash])
-  @@index([expiresAt])
   @@map("distance_cache")
-}
-
-// ---------- Notification ----------
-
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  title     String
-  message   String
-  type      String   @default("info") // info, success, warning, error
-  read      Boolean  @default(false)
-  metadata  String?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, read])
-  @@map("notifications")
-}
-
-// ---------- Location History ----------
-
-model LocationHistory {
-  id        String   @id @default(uuid())
-  driverId  String   @map("driver_id")
-  lat       Float
-  lng       Float
-  heading   Float    @default(0)
-  speed     Float    @default(0)
-  tripId    String?  @map("trip_id")
-  timestamp DateTime @default(now())
-
-  @@index([driverId, timestamp])
-  @@map("location_history")
 }
