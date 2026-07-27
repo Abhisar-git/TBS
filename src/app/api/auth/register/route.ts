@@ -4,6 +4,8 @@ import prisma from '@/lib/db/prisma';
 import { createToken } from '@/lib/auth/session';
 import type { UserRole } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
