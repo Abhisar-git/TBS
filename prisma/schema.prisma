@@ -49,16 +49,18 @@ model Accommodation {
 // ---------- Guest Profile & Travel Details ----------
 
 model GuestProfile {
-  id                  String   @id @default(uuid())
-  userId              String   @unique @map("user_id")
-  flightOrTrainNumber String?  @map("flight_or_train_number")
-  groupSize           Int      @default(1) @map("group_size")
-  luggageCount        Int      @default(1) @map("luggage_count")
-  status              String   @default("REGISTERED") // REGISTERED, WAITING, ASSIGNED, IN_TRANSIT, ARRIVED
-  pickupPoint         String?  @map("pickup_point")
-  accommodationId     String?  @map("accommodation_id")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                  String    @id @default(uuid())
+  userId              String    @unique @map("user_id")
+  flightOrTrainNumber String?   @map("flight_or_train_number")
+  arrivalEta          DateTime? @map("arrival_eta")
+  departureEta        DateTime? @map("departure_eta")
+  groupSize           Int       @default(1) @map("group_size")
+  luggageCount        Int       @default(1) @map("luggage_count")
+  status              String    @default("REGISTERED") // REGISTERED, WAITING, ASSIGNED, IN_TRANSIT, ARRIVED
+  pickupPoint         String?   @map("pickup_point")
+  accommodationId     String?   @map("accommodation_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   accommodation Accommodation? @relation(fields: [accommodationId], references: [id])
@@ -94,15 +96,17 @@ model DriverProfile {
 // ---------- Ride Requests ----------
 
 model RideRequest {
-  id             String   @id @default(uuid())
-  guestProfileId String   @map("guest_profile_id")
-  pickupPoint    String   @map("pickup_point")
-  dropoffPoint   String   @map("dropoff_point")
-  status         String   @default("PENDING") // PENDING, APPROVED, DECLINED, MATCHED
-  approvedById   String?  @map("approved_by_id")
-  declineReason  String?  @map("decline_reason")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id             String    @id @default(uuid())
+  guestProfileId String    @map("guest_profile_id")
+  pickupPoint    String    @map("pickup_point")
+  dropoffPoint   String    @map("dropoff_point")
+  status         String    @default("PENDING") // PENDING, APPROVED, DECLINED, MATCHED
+  approvedById   String?   @map("approved_by_id")
+  declineReason  String?   @map("decline_reason")
+  adminNotes     String?   @map("admin_notes")
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   guestProfile GuestProfile @relation(fields: [guestProfileId], references: [id], onDelete: Cascade)
   approvedBy   User?         @relation("ApprovedByAdmin", fields: [approvedById], references: [id])

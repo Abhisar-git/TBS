@@ -45,11 +45,10 @@ export async function matchRealtimeGuest(
     // Check if remaining capacity exists
     if (driver.seatCapacity - (guest.groupSize || 1) < 0) continue;
 
-    // Evaluate detour insertion assuming driver is heading to their current dropoff
-    const fakeDropoff: GeoPoint = { lat: 28.6183, lng: 77.2426 }; // Fallback venue
+    // Evaluate detour insertion using driver's intended dropoff location
     const detourEval = await evaluateDetourInsertion(
       driver,
-      fakeDropoff,
+      dropoffLocation,
       guest,
       pickupLocation,
       dropoffLocation

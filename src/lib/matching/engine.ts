@@ -18,6 +18,32 @@ export interface DispatchSummary {
 }
 
 /**
+ * Resolve geographic coordinates for a given address string or accommodation entity.
+ */
+export function getCoordinatesForLocation(
+  address?: string | null,
+  accommodation?: { lat: number; lng: number; address: string } | null
+): GeoPoint {
+  if (accommodation?.lat && accommodation?.lng) {
+    return { lat: accommodation.lat, lng: accommodation.lng };
+  }
+
+  const addr = (address || '').toLowerCase();
+  if (addr.includes('airport') || addr.includes('t3')) {
+    return { lat: 28.5562, lng: 77.1000 };
+  }
+  if (addr.includes('anand vihar') || addr.includes('anvt')) {
+    return { lat: 28.6508, lng: 77.3152 };
+  }
+  if (addr.includes('railway') || addr.includes('station') || addr.includes('ndls') || addr.includes('paharganj')) {
+    return { lat: 28.6430, lng: 77.2194 };
+  }
+
+  // Default venue coordinate (Bharat Mandapam, New Delhi)
+  return { lat: 28.6186, lng: 77.2486 };
+}
+
+/**
  * Execute real-time dispatch for a single guest (e.g. after an on-demand ride request is approved).
  */
 export async function dispatchSingleGuest(guestProfileId: string): Promise<{
@@ -36,11 +62,12 @@ export async function dispatchSingleGuest(guestProfileId: string): Promise<{
     return { success: false, message: 'Guest profile not found' };
   }
 
-  // Determine pickup and dropoff points
-  const pickupLocation: GeoPoint = { lat: 28.5562, lng: 77.1000 }; // Default IGI T3 Airport
-  const dropoffLocation: GeoPoint = guest.accommodation
-    ? { lat: guest.accommodation.lat, lng: guest.accommodation.lng }
-    : { lat: 28.6183, lng: 77.2426 }; // Default venue
+  // Determine dynamic pickup and dropoff points based on guest profile data
+  const pickupLocation = getCoordinatesForLocation(guest.pickupPoint, null);
+  const dropoffLocation = getCoordinatesForLocation(
+    guest.accommodation?.address,
+    guest.accommodation
+  );
 
   // 2. Fetch available drivers
   const availableDrivers = await prisma.driverProfile.findMany({
@@ -92,8 +119,8 @@ export async function dispatchSingleGuest(guestProfileId: string): Promise<{
     id: guest.id,
     userId: guest.userId,
     flightOrTrainNumber: guest.flightOrTrainNumber,
-    arrivalEta: null,
-    departureEta: null,
+    arrivalEta: guest.arrivalEta ? guest.arrivalEta.toISOString() : null,
+    departureEta: guest.departureEta ? guest.departureEta.toISOString() : null,
     pickupPoint: guest.pickupPoint || '',
     accommodationId: guest.accommodationId || '',
     groupSize: guest.groupSize,
@@ -114,44 +141,45 @@ export async function dispatchSingleGuest(guestProfileId: string): Promise<{
     return { success: false, message: 'No suitable driver meeting capacity and route constraints found.' };
   }
 
-  // 4. Create Trip record and update database states
+  // 4. Create Trip record and update database states atomically via Prisma Transaction
   const matchedDriver = matchResult.driver;
-  const trip = await prisma.trip.create({
-    data: {
-      tripType: 'ARRIVAL',
-      driverId: matchedDriver.id,
-      pickupAddress: guest.pickupPoint || 'Delhi Airport (T3)',
-      pickupLat: pickupLocation.lat,
-      pickupLng: pickupLocation.lng,
-      dropoffAddress: guest.accommodation?.address || 'Bharat Mandapam, New Delhi',
-      dropoffLat: dropoffLocation.lat,
-      dropoffLng: dropoffLocation.lng,
-      status: 'DRIVER_ASSIGNED',
-      scheduledPickupTime: new Date(),
-      estimatedDurationSec: matchResult.evaluation.travelTimeSec,
-      distanceKm: Math.round((matchResult.evaluation.distanceM / 1000) * 10) / 10,
-      passengers: {
-        create: [
-          {
-            guestProfileId: guest.id,
-            boardingStatus: 'WAITING',
-          },
-        ],
+  const pickupAddressStr = guest.pickupPoint || 'Pickup Point';
+  const dropoffAddressStr = guest.accommodation?.name
+    ? `${guest.accommodation.name}, ${guest.accommodation.address}`
+    : 'Bharat Mandapam, New Delhi';
+
+  const [trip] = await prisma.$transaction([
+    prisma.trip.create({
+      data: {
+        tripType: 'ARRIVAL',
+        driverId: matchedDriver.id,
+        pickupAddress: pickupAddressStr,
+        pickupLat: pickupLocation.lat,
+        pickupLng: pickupLocation.lng,
+        dropoffAddress: dropoffAddressStr,
+        dropoffLat: dropoffLocation.lat,
+        dropoffLng: dropoffLocation.lng,
+        status: 'DRIVER_ASSIGNED',
+        scheduledPickupAt: new Date(),
+        passengers: {
+          create: [
+            {
+              guestProfileId: guest.id,
+              boardingStatus: 'WAITING',
+            },
+          ],
+        },
       },
-    },
-  });
-
-  // Update guest status to ASSIGNED
-  await prisma.guestProfile.update({
-    where: { id: guest.id },
-    data: { status: 'ASSIGNED' },
-  });
-
-  // Update driver status to EN_ROUTE
-  await prisma.driverProfile.update({
-    where: { id: matchedDriver.id },
-    data: { status: 'EN_ROUTE' },
-  });
+    }),
+    prisma.guestProfile.update({
+      where: { id: guest.id },
+      data: { status: 'ASSIGNED' },
+    }),
+    prisma.driverProfile.update({
+      where: { id: matchedDriver.id },
+      data: { status: 'EN_ROUTE' },
+    }),
+  ]);
 
   return {
     success: true,
@@ -191,8 +219,8 @@ export async function runBatchDispatch(): Promise<DispatchSummary> {
     id: g.id,
     userId: g.userId,
     flightOrTrainNumber: g.flightOrTrainNumber,
-    arrivalEta: null,
-    departureEta: null,
+    arrivalEta: g.arrivalEta ? g.arrivalEta.toISOString() : null,
+    departureEta: g.departureEta ? g.departureEta.toISOString() : null,
     pickupPoint: g.pickupPoint || '',
     accommodationId: g.accommodationId || '',
     groupSize: g.groupSize,
@@ -217,16 +245,23 @@ export async function runBatchDispatch(): Promise<DispatchSummary> {
     breakMinutesRemaining: 0,
   }));
 
-  // 3. Build NxM Cost Matrix (Drivers x Guests)
+  // Build map of guest ID to DB object for fast lookup of accommodation details
+  const waitingGuestsMap = new Map(waitingGuests.map((g) => [g.id, g]));
+
+  // 3. Build NxM Cost Matrix (Drivers x Guests) using dynamic coordinates per guest
   const costMatrix: number[][] = [];
   for (let i = 0; i < formattedDrivers.length; i++) {
     const row: number[] = [];
     for (let j = 0; j < prioritizedGuests.length; j++) {
       const driver = formattedDrivers[i];
       const guest = prioritizedGuests[j];
-      const orig: GeoPoint = driver.currentLocation || { lat: 28.6183, lng: 77.2426 };
-      const pickupLoc: GeoPoint = { lat: 28.5562, lng: 77.1000 };
-      const dropLoc: GeoPoint = { lat: 28.5910, lng: 77.1725 };
+      const dbGuest = waitingGuestsMap.get(guest.id);
+
+      const pickupLoc: GeoPoint = getCoordinatesForLocation(guest.pickupPoint, null);
+      const dropLoc: GeoPoint = getCoordinatesForLocation(
+        dbGuest?.accommodation?.address,
+        dbGuest?.accommodation
+      );
 
       const evalRes = await evaluatePairing(driver, guest, pickupLoc, dropLoc);
       row.push(evalRes.isValid ? evalRes.cost : 1e9);
@@ -245,30 +280,41 @@ export async function runBatchDispatch(): Promise<DispatchSummary> {
     if (guestIdx !== -1 && guestIdx < prioritizedGuests.length) {
       const driver = formattedDrivers[driverIdx];
       const guest = prioritizedGuests[guestIdx];
+      const dbGuest = waitingGuestsMap.get(guest.id);
 
-      const pickupLoc: GeoPoint = { lat: 28.5562, lng: 77.1000 };
-      const dropLoc: GeoPoint = { lat: 28.5910, lng: 77.1725 };
+      const pickupLoc: GeoPoint = getCoordinatesForLocation(guest.pickupPoint, null);
+      const dropLoc: GeoPoint = getCoordinatesForLocation(
+        dbGuest?.accommodation?.address,
+        dbGuest?.accommodation
+      );
 
-      const trip = await prisma.trip.create({
-        data: {
-          tripType: 'ARRIVAL',
-          driverId: driver.id,
-          pickupAddress: guest.pickupPoint || 'Delhi Airport (T3)',
-          pickupLat: pickupLoc.lat,
-          pickupLng: pickupLoc.lng,
-          dropoffAddress: 'Taj Palace, New Delhi',
-          dropoffLat: dropLoc.lat,
-          dropoffLng: dropLoc.lng,
-          status: 'DRIVER_ASSIGNED',
-          scheduledPickupAt: new Date(),
-          passengers: {
-            create: [{ guestProfileId: guest.id, boardingStatus: 'WAITING' }],
+      const pickupAddressStr = guest.pickupPoint || 'Pickup Location';
+      const dropoffAddressStr = dbGuest?.accommodation?.name
+        ? `${dbGuest.accommodation.name}, ${dbGuest.accommodation.address}`
+        : 'Bharat Mandapam, New Delhi';
+
+      // Atomic transaction per matched pair
+      const [trip] = await prisma.$transaction([
+        prisma.trip.create({
+          data: {
+            tripType: 'ARRIVAL',
+            driverId: driver.id,
+            pickupAddress: pickupAddressStr,
+            pickupLat: pickupLoc.lat,
+            pickupLng: pickupLoc.lng,
+            dropoffAddress: dropoffAddressStr,
+            dropoffLat: dropLoc.lat,
+            dropoffLng: dropLoc.lng,
+            status: 'DRIVER_ASSIGNED',
+            scheduledPickupAt: new Date(),
+            passengers: {
+              create: [{ guestProfileId: guest.id, boardingStatus: 'WAITING' }],
+            },
           },
-        },
-      });
-
-      await prisma.guestProfile.update({ where: { id: guest.id }, data: { status: 'ASSIGNED' } });
-      await prisma.driverProfile.update({ where: { id: driver.id }, data: { status: 'EN_ROUTE' } });
+        }),
+        prisma.guestProfile.update({ where: { id: guest.id }, data: { status: 'ASSIGNED' } }),
+        prisma.driverProfile.update({ where: { id: driver.id }, data: { status: 'EN_ROUTE' } }),
+      ]);
 
       tripsCreated.push(trip.id);
       matchedPairings.push({ driverId: driver.id, guestProfileId: guest.id, tripId: trip.id });
