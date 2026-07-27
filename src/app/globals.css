@@ -194,3 +194,19 @@
     @apply bg-clip-text text-transparent bg-gradient-to-r from-royal-700 via-royal-600 to-royal-800;
   }
 }
+
+/* Fix Leaflet map z-index bleeding over headers and footers */
+.leaflet-container {
+  z-index: 1 !important;
+  isolation: isolate;
+}
+
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 2 !important;
+}
+

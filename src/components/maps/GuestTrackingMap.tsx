@@ -41,7 +41,7 @@ export default function GuestTrackingMap({ trip, liveLocation }: GuestTrackingMa
   ];
 
   return (
-    <div className="w-full h-80 rounded-2xl overflow-hidden border border-bride-border shadow-lg relative">
+    <div className="w-full h-80 rounded-2xl overflow-hidden border border-gold-500/20 shadow-lg relative z-0 isolate">
       <MapContainer
         center={[driverPos.lat, driverPos.lng]}
         zoom={13}

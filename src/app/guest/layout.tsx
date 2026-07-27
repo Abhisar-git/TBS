@@ -19,7 +19,7 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-ivory-50 text-charcoal-700 flex flex-col pb-24 font-sans">
-      <header className="h-20 bg-white/90 backdrop-blur-md border-b border-gold-500/15 px-6 md:px-12 flex items-center justify-between sticky top-0 z-40 shadow-royal">
+      <header className="h-20 bg-white/90 backdrop-blur-md border-b border-gold-500/15 px-6 md:px-12 flex items-center justify-between sticky top-0 z-50 shadow-royal">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-400 via-gold-500 to-royal-700 flex items-center justify-center shadow-gold-glow">
             <Crown className="w-4.5 h-4.5 text-white" />
@@ -46,7 +46,7 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
 
       <main className="flex-1 max-w-lg w-full mx-auto p-6 md:p-8 space-y-6">{children}</main>
 
-      <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/95 backdrop-blur-md border-t border-gold-500/15 flex items-center justify-around z-40 px-4 shadow-royal">
+      <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/95 backdrop-blur-md border-t border-gold-500/15 flex items-center justify-around z-50 px-4 shadow-royal">
         <Link
           href="/guest/dashboard"
           className={`flex flex-col items-center gap-1 text-xs font-sans transition-all duration-400 ${
