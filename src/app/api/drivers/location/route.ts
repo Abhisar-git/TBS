@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/auth/rbac';
 import eventBroadcaster from '@/lib/events/eventBroadcaster';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/drivers/location — Driver posts location update
 export async function POST(request: Request) {
   const result = await requireAuth(request);
@@ -47,8 +49,6 @@ export async function POST(request: Request) {
       data: {
         currentLat: parsedLat,
         currentLng: parsedLng,
-        heading: parseFloat(heading || 0),
-        speed: parseFloat(speed || 0),
         locationUpdatedAt: new Date(),
       },
     });

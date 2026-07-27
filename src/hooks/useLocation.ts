@@ -10,23 +10,24 @@ interface LocationTrackerOptions {
 
 export function useLocationTracker({
   active,
-  intervalMs = 5000,
+  intervalMs = 10000,
   onLocationUpdate,
 }: LocationTrackerOptions) {
   const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSentRef = useRef<number>(0);
+  const callbackRef = useRef(onLocationUpdate);
+
+  useEffect(() => {
+    callbackRef.current = onLocationUpdate;
+  }, [onLocationUpdate]);
 
   useEffect(() => {
     if (!active) {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
-      }
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
       }
       return;
     }
@@ -39,6 +40,11 @@ export function useLocationTracker({
     const sendLocation = async (lat: number, lng: number, heading = 0, speed = 0) => {
       const token = localStorage.getItem('tbs-token');
       if (!token) return;
+
+      // Throttle server updates to once every intervalMs (default 10s)
+      const now = Date.now();
+      if (now - lastSentRef.current < intervalMs) return;
+      lastSentRef.current = now;
 
       try {
         await fetch('/api/drivers/location', {
@@ -56,11 +62,9 @@ export function useLocationTracker({
 
     const handleSuccess = (pos: GeolocationPosition) => {
       const { latitude, longitude, heading, speed } = pos.coords;
-      const newPos = { lat: latitude, lng: longitude };
-      setPosition(newPos);
+      setPosition({ lat: latitude, lng: longitude });
       setError(null);
-      onLocationUpdate?.(latitude, longitude);
-
+      callbackRef.current?.(latitude, longitude);
       sendLocation(latitude, longitude, heading || 0, speed || 0);
     };
 
@@ -70,25 +74,17 @@ export function useLocationTracker({
 
     watchIdRef.current = navigator.geolocation.watchPosition(handleSuccess, handleError, {
       enableHighAccuracy: true,
-      maximumAge: 3000,
-      timeout: 10000,
+      maximumAge: 5000,
+      timeout: 15000,
     });
-
-    intervalRef.current = setInterval(() => {
-      if (position) {
-        sendLocation(position.lat, position.lng);
-      }
-    }, intervalMs);
 
     return () => {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
+        watchIdRef.current = null;
       }
     };
-  }, [active, intervalMs, onLocationUpdate, position]);
+  }, [active, intervalMs]);
 
   return { position, error };
 }
