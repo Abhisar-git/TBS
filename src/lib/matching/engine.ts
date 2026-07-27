@@ -260,7 +260,7 @@ export async function runBatchDispatch(): Promise<DispatchSummary> {
           dropoffLat: dropLoc.lat,
           dropoffLng: dropLoc.lng,
           status: 'DRIVER_ASSIGNED',
-          scheduledPickupTime: new Date(),
+          scheduledPickupAt: new Date(),
           passengers: {
             create: [{ guestProfileId: guest.id, boardingStatus: 'WAITING' }],
           },

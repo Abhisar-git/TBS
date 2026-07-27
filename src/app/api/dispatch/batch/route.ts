@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/auth/rbac';
 import { runBatchDispatch } from '@/lib/matching/engine';
 import prisma from '@/lib/db/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/dispatch/batch — Get dispatch queue status
 export async function GET(request: Request) {
   const result = await requireAdmin(request);

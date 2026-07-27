@@ -133,7 +133,7 @@ export async function POST(request: Request) {
         dropoffAddress,
         dropoffLat: parseFloat(dropoffLat),
         dropoffLng: parseFloat(dropoffLng),
-        scheduledPickupTime: scheduledPickupTime ? new Date(scheduledPickupTime) : null,
+        scheduledPickupAt: scheduledPickupTime ? new Date(scheduledPickupTime) : null,
         status: driverId ? 'DRIVER_ASSIGNED' : 'PENDING',
         estimatedDurationSec: estimatedDurationSec || null,
         distanceKm: distanceKm || null,

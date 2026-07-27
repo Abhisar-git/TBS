@@ -31,7 +31,7 @@ export async function runDriverPortalVerification() {
       dropoffLat: 28.5910,
       dropoffLng: 77.1725,
       status: 'DRIVER_ASSIGNED',
-      scheduledPickupTime: new Date(),
+      scheduledPickupAt: new Date(),
       passengers: {
         create: [{ guestProfileId: guest.id, boardingStatus: 'WAITING' }],
       },
