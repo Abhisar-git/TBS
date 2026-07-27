@@ -66,7 +66,7 @@ export async function PATCH(
 
     // Record timestamps for key transitions
     if (status === 'IN_PROGRESS') {
-      updateData.actualPickupTime = new Date();
+      updateData.actualStartAt = new Date();
       // Update all passengers to BOARDED
       await prisma.tripPassenger.updateMany({
         where: { tripId: id, boardingStatus: 'WAITING' },
@@ -81,10 +81,10 @@ export async function PATCH(
     }
 
     if (status === 'COMPLETED') {
-      updateData.actualDropoffTime = new Date();
-      if (trip.actualPickupTime) {
+      updateData.actualEndAt = new Date();
+      if (trip.actualStartAt) {
         updateData.actualDurationSec = Math.round(
-          (Date.now() - new Date(trip.actualPickupTime).getTime()) / 1000
+          (Date.now() - new Date(trip.actualStartAt).getTime()) / 1000
         );
       }
       // Update passengers to DROPPED_OFF

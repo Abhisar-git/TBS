@@ -66,13 +66,11 @@ export async function runDriverPortalVerification() {
     where: { id: driver.id },
     data: {
       status: 'ON_BREAK',
-      breakMinutesRemaining: 15,
-      breakStartedAt: new Date(),
-      availableAfter: breakEnd,
+      breakUntil: breakEnd,
     },
   });
 
-  if (updatedDriver.status !== 'ON_BREAK' || !updatedDriver.availableAfter) {
+  if (updatedDriver.status !== 'ON_BREAK' || !updatedDriver.breakUntil) {
     throw new Error('Driver break manager test failed');
   }
 
@@ -81,9 +79,7 @@ export async function runDriverPortalVerification() {
     where: { id: driver.id },
     data: {
       status: 'AVAILABLE',
-      breakMinutesRemaining: 0,
-      breakStartedAt: null,
-      availableAfter: null,
+      breakUntil: null,
     },
   });
 }

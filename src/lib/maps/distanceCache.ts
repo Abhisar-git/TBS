@@ -62,7 +62,7 @@ export async function getCachedDistance(
       const result: DistanceResult = {
         distanceM: cached.distanceM,
         durationSec: cached.durationSec,
-        durationInTrafficSec: cached.durationInTrafficSec || undefined,
+        durationInTrafficSec: cached.durationSec,
       };
 
       // Populate memory cache

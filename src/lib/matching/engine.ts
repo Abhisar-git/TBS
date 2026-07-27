@@ -68,9 +68,9 @@ export async function dispatchSingleGuest(guestProfileId: string): Promise<{
     status: d.status as DriverProfile['status'],
     currentLocation: d.currentLat && d.currentLng ? { lat: d.currentLat, lng: d.currentLng } : null,
     locationUpdatedAt: d.locationUpdatedAt ? d.locationUpdatedAt.toISOString() : null,
-    availableAfter: d.availableAfter ? d.availableAfter.toISOString() : null,
+    availableAfter: d.breakUntil ? d.breakUntil.toISOString() : null,
     predictedFreeLocation: null,
-    breakMinutesRemaining: d.breakMinutesRemaining,
+    breakMinutesRemaining: 0,
   }));
 
   const formattedEnRoute: DriverProfile[] = enRouteDrivers.map((d) => ({
@@ -83,18 +83,18 @@ export async function dispatchSingleGuest(guestProfileId: string): Promise<{
     status: d.status as DriverProfile['status'],
     currentLocation: d.currentLat && d.currentLng ? { lat: d.currentLat, lng: d.currentLng } : null,
     locationUpdatedAt: d.locationUpdatedAt ? d.locationUpdatedAt.toISOString() : null,
-    availableAfter: d.availableAfter ? d.availableAfter.toISOString() : null,
+    availableAfter: d.breakUntil ? d.breakUntil.toISOString() : null,
     predictedFreeLocation: null,
-    breakMinutesRemaining: d.breakMinutesRemaining,
+    breakMinutesRemaining: 0,
   }));
 
   const formattedGuest: GuestProfile = {
     id: guest.id,
     userId: guest.userId,
     flightOrTrainNumber: guest.flightOrTrainNumber,
-    arrivalEta: guest.arrivalEta ? guest.arrivalEta.toISOString() : null,
-    departureEta: guest.departureEta ? guest.departureEta.toISOString() : null,
-    pickupPoint: guest.pickupPoint,
+    arrivalEta: null,
+    departureEta: null,
+    pickupPoint: guest.pickupPoint || '',
     accommodationId: guest.accommodationId || '',
     groupSize: guest.groupSize,
     luggageCount: guest.luggageCount,
@@ -191,9 +191,9 @@ export async function runBatchDispatch(): Promise<DispatchSummary> {
     id: g.id,
     userId: g.userId,
     flightOrTrainNumber: g.flightOrTrainNumber,
-    arrivalEta: g.arrivalEta ? g.arrivalEta.toISOString() : null,
-    departureEta: g.departureEta ? g.departureEta.toISOString() : null,
-    pickupPoint: g.pickupPoint,
+    arrivalEta: null,
+    departureEta: null,
+    pickupPoint: g.pickupPoint || '',
     accommodationId: g.accommodationId || '',
     groupSize: g.groupSize,
     luggageCount: g.luggageCount,
@@ -212,9 +212,9 @@ export async function runBatchDispatch(): Promise<DispatchSummary> {
     status: d.status as DriverProfile['status'],
     currentLocation: d.currentLat && d.currentLng ? { lat: d.currentLat, lng: d.currentLng } : null,
     locationUpdatedAt: d.locationUpdatedAt ? d.locationUpdatedAt.toISOString() : null,
-    availableAfter: d.availableAfter ? d.availableAfter.toISOString() : null,
+    availableAfter: d.breakUntil ? d.breakUntil.toISOString() : null,
     predictedFreeLocation: null,
-    breakMinutesRemaining: d.breakMinutesRemaining,
+    breakMinutesRemaining: 0,
   }));
 
   // 3. Build NxM Cost Matrix (Drivers x Guests)

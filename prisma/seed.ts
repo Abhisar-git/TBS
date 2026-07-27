@@ -1,81 +1,52 @@
-// ============================================================
-// TBS — Seed Script (Delhi, India)
-// Generates realistic demo data: 1 event (Bharat Mandapam),
-// 4 accommodations, 15 drivers, 50 guests, and sample trips
-// ============================================================
-
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { DELHI_LOCATIONS } from '../src/lib/maps/locations';
 
 const prisma = new PrismaClient();
 
-const VEHICLE_MODELS = [
-  'Toyota Innova Crysta', 'Mahindra XUV700', 'Hyundai Creta',
-  'Toyota Fortuner', 'MG Hector Plus', 'Kia Carens',
-  'Maruti Ertiga', 'Toyota Camry', 'Hyundai Tucson',
-  'Tata Safari', 'Mahindra Scorpio-N', 'Honda City',
-  'Skoda Kushaq', 'Volkswagen Virtus', 'Hyundai Verna',
-];
+// Coordinates for Delhi locations
+const LOCATIONS = {
+  AIRPORT_T3: { lat: 28.5562, lng: 77.1000, address: 'Indira Gandhi International Airport, Terminal 3, New Delhi' },
+  NDLS_STATION: { lat: 28.6430, lng: 77.2194, address: 'New Delhi Railway Station, Paharganj, New Delhi' },
+  ANVT_STATION: { lat: 28.6508, lng: 77.3152, address: 'Anand Vihar Terminal, East Delhi' },
+  BHARAT_MANDAPAM: { lat: 28.6186, lng: 77.2486, address: 'Bharat Mandapam, Pragati Maidan, New Delhi' },
+  HOTELS: [
+    { name: 'Taj Palace, Chanakyapuri', lat: 28.5910, lng: 77.1720, address: 'Sardar Patel Marg, Diplomatic Enclave, New Delhi' },
+    { name: 'The Leela Palace, Chanakyapuri', lat: 28.5833, lng: 77.1873, address: 'Diplomatic Enclave, Chanakyapuri, New Delhi' },
+    { name: 'ITC Maurya, Diplomatic Enclave', lat: 28.5925, lng: 77.1725, address: 'Diplomatic Enclave, Sardar Patel Marg, New Delhi' },
+    { name: 'JW Marriott, Aerocity', lat: 28.5504, lng: 77.1213, address: 'Asset Area 4, Aerocity, New Delhi' },
+  ],
+};
 
-const FIRST_NAMES = [
-  'Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Reyansh', 'Sai',
-  'Arnav', 'Dhruv', 'Kabir', 'Ananya', 'Diya', 'Aisha', 'Myra',
-  'Sara', 'Aadhya', 'Ira', 'Kiara', 'Riya', 'Priya', 'Neha',
-  'Rahul', 'Amit', 'Vikram', 'Suresh', 'Rajesh', 'Pooja', 'Sneha',
-  'Kiran', 'Deepak', 'Manish', 'Rohit', 'Sanjay', 'Meera', 'Kavita',
-  'Nandini', 'Shreya', 'Tanvi', 'Ishaan', 'Rohan', 'Kartik', 'Varun',
-  'Nikhil', 'Prashant', 'Gayatri', 'Lakshmi', 'Harini', 'Divya', 'Akash', 'Pranav',
-];
-
-const LAST_NAMES = [
-  'Sharma', 'Patel', 'Kumar', 'Singh', 'Reddy', 'Gupta', 'Iyer',
-  'Nair', 'Joshi', 'Mehta', 'Shah', 'Desai', 'Rao', 'Pillai',
-  'Mishra', 'Verma', 'Malhotra', 'Agarwal', 'Bhat', 'Chopra',
+const GUEST_NAMES = [
+  'Aarav Sharma', 'Ananya Gupta', 'Rohan Verma', 'Priya Patel', 'Vikram Singh',
+  'Isha Kapoor', 'Aditya Joshi', 'Kavya Malhotra', 'Siddharth Rao', 'Diya Mehta',
+  'Arjun Nair', 'Sneha Reddy', 'Rahul Chopra', 'Neha Agarwal', 'Karan Bhatia',
+  'Pooja Deshmukh', 'Varun Saxena', 'Rhea Bansal', 'Gautam Pandey', 'Tanya Roy',
+  'Amitabh Sengupta', 'Sunita Trivedi', 'Devendra Jha', 'Nisha Kulkarni', 'Rajesh Iyer',
+  'Meera Menon', 'Sanjay Dutt', 'Archana Srivastava', 'Venkatesh Prasad', 'Swati Hegde',
+  'Abhinav Shukla', 'Ritu Saxena', 'Alok Pandey', 'Geeta Vishwanathan', 'Manish Malhotra',
+  'Divya Khosla', 'Pankaj Tripathi', 'Seema Biswas', 'Nitin Gadkari', 'Shilpa Shetty',
+  'Rishabh Pant', 'Smriti Mandhana', 'Neeraj Chopra', 'PV Sindhu', 'Sunil Chhetri',
+  'Saina Nehwal', 'Rohan Bopanna', 'Deepika Kumari', 'Achanta Sharath', 'Bhavani Devi',
 ];
 
 const DRIVER_NAMES = [
-  'Rajesh Kumar', 'Satish Sharma', 'Gurpreet Singh', 'Balwan Singh', 'Dharmendra Yadav',
-  'Sanjeev Verma', 'Ramesh Chand', 'Kuldeep Saini', 'Virender Tomar', 'Jasbir Gill',
-  'Manoj Tyagi', 'Mukesh Pal', 'Deepak Choudhary', 'Hardeep Singh', 'Naresh Kumar',
+  'Rajesh Kumar', 'Suresh Pal', 'Ramesh Yadav', 'Mahesh Verma', 'Dinesh Singh',
+  'Mukesh Sharma', 'Rakesh Gupta', 'Sanjay Paswan', 'Vijay Chauhan', 'Ajay Saini',
+  'Sunil Rawat', 'Anil Tomar', 'Pramod Mishra', 'Vinod Joshi', 'Satish Tyagi',
 ];
 
-const FLIGHT_NUMBERS = [
-  'AI-801', '6E-205', 'UK-944', 'SG-817', 'AI-402',
-  '6E-5321', 'UK-812', 'SG-298', 'AI-102', '6E-611',
-  'QR-578', 'EK-513', 'SQ-401', 'LH-760', 'BA-256',
+const VEHICLE_MODELS = [
+  'Toyota Innova Crysta', 'Toyota Fortuner', 'Maruti Suzuki Ertiga',
+  'Mercedes-Benz E-Class', 'BMW 5 Series', 'Audi A6',
+  'Honda City', 'Hyundai Alcazar', 'Kia Carens', 'Force Urbania',
 ];
-
-const TRAIN_NUMBERS = [
-  '12004 NDLS Vande Bharat', '12423 Rajdhani Express', '12058 Jan Shatabdi',
-  '12615 Grand Trunk Express', '12951 NDLS Rajdhani',
-];
-
-function randomElement<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function generatePhone(): string {
-  return `+91 ${randomInt(90000, 99999)}${randomInt(10000, 99999)}`;
-}
-
-function generateVehicleNumber(): string {
-  const states = ['DL', 'HR', 'UP'];
-  const state = randomElement(states);
-  return `${state} ${randomInt(1, 12).toString().padStart(2, '0')} ${String.fromCharCode(65 + randomInt(0, 25))}${String.fromCharCode(65 + randomInt(0, 25))} ${randomInt(1000, 9999)}`;
-}
 
 async function main() {
   console.log('🌱 Seeding TBS database with Delhi event data...\n');
 
   // Clear existing data in correct sequence
   console.log('🧹 Clearing existing data...');
-  await prisma.locationHistory.deleteMany();
-  await prisma.notification.deleteMany();
   await prisma.distanceCache.deleteMany();
   await prisma.rideRequest.deleteMany();
   await prisma.tripPassenger.deleteMany();
@@ -84,284 +55,178 @@ async function main() {
   await prisma.driverProfile.deleteMany();
   await prisma.user.deleteMany();
   await prisma.accommodation.deleteMany();
-  await prisma.event.deleteMany();
 
-  // 1. Create Event (Delhi - Bharat Mandapam)
-  console.log('🎪 Creating Delhi event...');
-  const eventDate = new Date();
-  eventDate.setDate(eventDate.getDate() + 1); // Tomorrow
-  eventDate.setHours(9, 0, 0, 0);
-
-  const eventEnd = new Date(eventDate);
-  eventEnd.setHours(18, 0, 0, 0);
-
-  await prisma.event.create({
-    data: {
-      name: 'Global Business Summit Delhi 2026',
-      venueAddress: DELHI_LOCATIONS.venue.address,
-      venueLat: DELHI_LOCATIONS.venue.lat,
-      venueLng: DELHI_LOCATIONS.venue.lng,
-      eventStart: eventDate,
-      eventEnd: eventEnd,
-      schedule: JSON.stringify([
-        { id: '1', title: 'Guest Arrivals & Hotel Transfer', startTime: eventDate.toISOString(), endTime: new Date(eventDate.getTime() - 2 * 60 * 60 * 1000).toISOString(), tripType: 'ARRIVAL' },
-        { id: '2', title: 'Morning Transfer to Bharat Mandapam', startTime: eventDate.toISOString(), endTime: new Date(eventDate.getTime() + 1 * 60 * 60 * 1000).toISOString(), tripType: 'TO_VENUE' },
-        { id: '3', title: 'Evening Return to Hotels', startTime: eventEnd.toISOString(), endTime: new Date(eventEnd.getTime() + 2 * 60 * 60 * 1000).toISOString(), tripType: 'FROM_VENUE' },
-        { id: '4', title: 'Airport & Station Departures', startTime: new Date(eventEnd.getTime() + 2 * 60 * 60 * 1000).toISOString(), endTime: new Date(eventEnd.getTime() + 6 * 60 * 60 * 1000).toISOString(), tripType: 'DEPARTURE' },
-      ]),
-    },
-  });
-
-  // 2. Create Accommodations (Delhi)
+  // 1. Create Delhi Accommodations
   console.log('🏨 Creating Delhi accommodations...');
   const accommodations = [];
-  for (const acc of DELHI_LOCATIONS.accommodations) {
-    const created = await prisma.accommodation.create({
+  for (const hotel of LOCATIONS.HOTELS) {
+    const acc = await prisma.accommodation.create({
       data: {
-        name: acc.name,
-        address: acc.address,
-        lat: acc.lat,
-        lng: acc.lng,
+        name: hotel.name,
+        address: hotel.address,
+        lat: hotel.lat,
+        lng: hotel.lng,
       },
     });
-    accommodations.push(created);
+    accommodations.push(acc);
   }
+
+  // 2. Hash Password
+  const passwordHash = await bcrypt.hash('admin123', 10);
+  const driverPasswordHash = await bcrypt.hash('driver123', 10);
+  const guestPasswordHash = await bcrypt.hash('guest123', 10);
 
   // 3. Create Admin User
   console.log('👑 Creating admin user...');
-  const adminHash = await bcrypt.hash('admin123', 12);
   await prisma.user.create({
     data: {
-      name: 'Delhi Ops Admin',
+      name: 'Event Director',
       email: 'admin@tbs.event',
-      phone: '+91 98100 12345',
-      passwordHash: adminHash,
+      phone: '+91 98765 00000',
+      passwordHash,
       role: 'ADMIN',
     },
   });
 
-  // 4. Create Drivers (Delhi fleet)
+  // 4. Create Drivers
   console.log('🚗 Creating 15 drivers...');
-  const driverHash = await bcrypt.hash('driver123', 12);
   const drivers = [];
+  for (let i = 0; i < DRIVER_NAMES.length; i++) {
+    const name = DRIVER_NAMES[i];
+    const vehicleModel = VEHICLE_MODELS[i % VEHICLE_MODELS.length];
+    const isLarge = vehicleModel.includes('Innova') || vehicleModel.includes('Fortuner') || vehicleModel.includes('Urbania') || vehicleModel.includes('Alcazar') || vehicleModel.includes('Carens');
 
-  for (let i = 0; i < 15; i++) {
-    const model = VEHICLE_MODELS[i];
-    const isLargeVehicle = ['Toyota Innova Crysta', 'Mahindra XUV700', 'Toyota Fortuner', 'MG Hector Plus', 'Kia Carens', 'Tata Safari', 'Mahindra Scorpio-N', 'Maruti Ertiga'].includes(model);
-
-    // Spread driver positions across Delhi (near airport, railway stations, venue, and hotels)
-    const baseLoc = i < 4
-      ? DELHI_LOCATIONS.airport
-      : i < 8
-      ? DELHI_LOCATIONS.accommodations[i % DELHI_LOCATIONS.accommodations.length]
-      : DELHI_LOCATIONS.venue;
-
-    const driver = await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
-        name: DRIVER_NAMES[i],
+        name,
         email: `driver${i + 1}@tbs.event`,
-        phone: generatePhone(),
-        passwordHash: driverHash,
+        phone: `+91 98765 ${String(1000 + i + 1).padStart(5, '0')}`,
+        passwordHash: driverPasswordHash,
         role: 'DRIVER',
         driverProfile: {
           create: {
-            vehicleNumber: generateVehicleNumber(),
-            vehicleModel: model,
-            seatCapacity: isLargeVehicle ? randomInt(5, 7) : randomInt(3, 4),
-            luggageCapacity: isLargeVehicle ? randomInt(4, 6) : randomInt(2, 3),
-            status: i < 12 ? 'AVAILABLE' : 'OFFLINE',
-            currentLat: baseLoc.lat + (Math.random() - 0.5) * 0.03,
-            currentLng: baseLoc.lng + (Math.random() - 0.5) * 0.03,
+            vehicleNumber: `DL 01 ET ${1000 + i}`,
+            vehicleModel,
+            seatCapacity: isLarge ? 6 : 4,
+            luggageCapacity: isLarge ? 5 : 3,
+            status: i < 10 ? 'AVAILABLE' : i < 13 ? 'ON_TRIP' : 'ON_BREAK',
+            currentLat: LOCATIONS.AIRPORT_T3.lat + (Math.random() - 0.5) * 0.05,
+            currentLng: LOCATIONS.AIRPORT_T3.lng + (Math.random() - 0.5) * 0.05,
             locationUpdatedAt: new Date(),
           },
         },
       },
       include: { driverProfile: true },
     });
-    drivers.push(driver);
+    if (user.driverProfile) drivers.push(user.driverProfile);
   }
 
-  // 5. Create Guests (50 attendees)
+  // 5. Create Guests
   console.log('👥 Creating 50 guests...');
-  const guestHash = await bcrypt.hash('guest123', 12);
-  const usedNames = new Set<string>();
+  const guests = [];
+  const pickupPoints = [
+    LOCATIONS.AIRPORT_T3.address,
+    LOCATIONS.NDLS_STATION.address,
+    LOCATIONS.ANVT_STATION.address,
+  ];
 
-  for (let i = 0; i < 50; i++) {
-    let fullName: string;
-    do {
-      fullName = `${FIRST_NAMES[i % FIRST_NAMES.length]} ${randomElement(LAST_NAMES)}`;
-    } while (usedNames.has(fullName));
-    usedNames.add(fullName);
+  for (let i = 0; i < GUEST_NAMES.length; i++) {
+    const name = GUEST_NAMES[i];
+    const acc = accommodations[i % accommodations.length];
+    const pickup = pickupPoints[i % pickupPoints.length];
 
-    const accommodation = randomElement(accommodations);
-    const isFlying = Math.random() > 0.3; // 70% arrive by flight at IGI T3
-    const arrivalHoursBeforeEvent = randomInt(2, 24);
-    const arrivalTime = new Date(eventDate.getTime() - arrivalHoursBeforeEvent * 60 * 60 * 1000);
-    const departureHoursAfterEvent = randomInt(2, 12);
-    const departureTime = new Date(eventEnd.getTime() + departureHoursAfterEvent * 60 * 60 * 1000);
-
-    const pickupPoint = isFlying
-      ? DELHI_LOCATIONS.airport.address
-      : randomElement(DELHI_LOCATIONS.stations).address;
-    const groupSize = Math.random() > 0.8 ? randomInt(2, 4) : 1;
-    const luggageCount = groupSize + (Math.random() > 0.5 ? 1 : 0);
-
-    let status = 'REGISTERED';
-    if (i < 10) status = 'ARRIVED';
-    else if (i < 15) status = 'WAITING';
-    else if (i < 20) status = 'ASSIGNED';
-
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
-        name: fullName,
+        name,
         email: `guest${i + 1}@tbs.event`,
-        phone: generatePhone(),
-        passwordHash: guestHash,
+        phone: `+91 98100 ${String(2000 + i + 1).padStart(5, '0')}`,
+        passwordHash: guestPasswordHash,
         role: 'GUEST',
         guestProfile: {
           create: {
-            flightOrTrainNumber: isFlying ? randomElement(FLIGHT_NUMBERS) : randomElement(TRAIN_NUMBERS),
-            arrivalEta: arrivalTime,
-            departureEta: departureTime,
-            pickupPoint,
-            accommodationId: accommodation.id,
-            groupSize,
-            luggageCount,
-            status,
+            flightOrTrainNumber: i % 2 === 0 ? `AI-${100 + i}` : `1200${i % 10}`,
+            groupSize: (i % 3) + 1,
+            luggageCount: (i % 3) + 1,
+            status: i < 15 ? 'WAITING' : i < 30 ? 'ASSIGNED' : i < 40 ? 'IN_TRANSIT' : 'ARRIVED',
+            pickupPoint: pickup,
+            accommodationId: acc.id,
+          },
+        },
+      },
+      include: { guestProfile: true },
+    });
+    if (user.guestProfile) guests.push(user.guestProfile);
+  }
+
+  // 6. Create Sample Trips
+  console.log('🚕 Creating sample Delhi trips...');
+  for (let i = 0; i < 7; i++) {
+    const driver = drivers[i];
+    const guest = guests[i];
+    const hotel = accommodations[i % accommodations.length];
+
+    const trip = await prisma.trip.create({
+      data: {
+        tripType: i % 2 === 0 ? 'ARRIVAL' : 'VENUE_TRANSFER',
+        driverId: driver.id,
+        status: i < 3 ? 'DRIVER_ASSIGNED' : i < 5 ? 'IN_PROGRESS' : 'COMPLETED',
+        pickupAddress: LOCATIONS.AIRPORT_T3.address,
+        pickupLat: LOCATIONS.AIRPORT_T3.lat,
+        pickupLng: LOCATIONS.AIRPORT_T3.lng,
+        dropoffAddress: hotel.address,
+        dropoffLat: hotel.lat,
+        dropoffLng: hotel.lng,
+        scheduledPickupAt: new Date(Date.now() + i * 3600000),
+        passengers: {
+          create: {
+            guestProfileId: guest.id,
+            boardingStatus: i < 5 ? 'ASSIGNED' : 'DROPPED_OFF',
           },
         },
       },
     });
-  }
 
-  // 6. Create Sample Completed & Active Trips
-  console.log('🚕 Creating sample Delhi trips...');
-
-  // Completed trips
-  for (let i = 0; i < 4; i++) {
-    const driverProfile = drivers[i].driverProfile!;
-    const guests = await prisma.guestProfile.findMany({
-      where: { status: 'ARRIVED' },
-      take: randomInt(1, 2),
-      skip: i * 2,
-    });
-
-    if (guests.length === 0) continue;
-
-    const acc = accommodations[i % accommodations.length];
-    await prisma.trip.create({
-      data: {
-        tripType: 'ARRIVAL',
-        driverId: driverProfile.id,
-        pickupAddress: DELHI_LOCATIONS.airport.address,
-        pickupLat: DELHI_LOCATIONS.airport.lat,
-        pickupLng: DELHI_LOCATIONS.airport.lng,
-        dropoffAddress: acc.address,
-        dropoffLat: acc.lat,
-        dropoffLng: acc.lng,
-        scheduledPickupTime: new Date(Date.now() - (i + 1) * 60 * 60 * 1000),
-        actualPickupTime: new Date(Date.now() - (i + 1) * 60 * 60 * 1000 + 5 * 60 * 1000),
-        actualDropoffTime: new Date(Date.now() - i * 60 * 60 * 1000),
-        status: 'COMPLETED',
-        estimatedDurationSec: randomInt(1800, 3000),
-        actualDurationSec: randomInt(2100, 3300),
-        distanceKm: randomInt(15, 25),
-        passengers: {
-          create: guests.map(g => ({
-            guestProfileId: g.id,
-            boardingStatus: 'DROPPED_OFF',
-          })),
-        },
-      },
+    // Update guest status
+    await prisma.guestProfile.update({
+      where: { id: guest.id },
+      data: { status: i < 3 ? 'ASSIGNED' : i < 5 ? 'IN_TRANSIT' : 'ARRIVED' },
     });
   }
 
-  // Active trips
-  const activeStatuses = ['DRIVER_EN_ROUTE', 'DRIVER_ARRIVED', 'IN_PROGRESS'];
-  for (let i = 0; i < 3; i++) {
-    const driverProfile = drivers[i + 4].driverProfile!;
-    const guestsForTrip = await prisma.guestProfile.findMany({
-      where: { status: 'ASSIGNED' },
-      take: 1,
-      skip: i,
-    });
-
-    if (guestsForTrip.length === 0) continue;
-
-    const acc = accommodations[i % accommodations.length];
-    await prisma.trip.create({
-      data: {
-        tripType: 'ARRIVAL',
-        driverId: driverProfile.id,
-        pickupAddress: DELHI_LOCATIONS.airport.address,
-        pickupLat: DELHI_LOCATIONS.airport.lat,
-        pickupLng: DELHI_LOCATIONS.airport.lng,
-        dropoffAddress: acc.address,
-        dropoffLat: acc.lat,
-        dropoffLng: acc.lng,
-        scheduledPickupTime: new Date(),
-        status: activeStatuses[i],
-        estimatedDurationSec: randomInt(1800, 3000),
-        distanceKm: randomInt(15, 25),
-        passengers: {
-          create: guestsForTrip.map(g => ({
-            guestProfileId: g.id,
-            boardingStatus: i === 2 ? 'BOARDED' : 'WAITING',
-          })),
-        },
-      },
-    });
-
-    await prisma.driverProfile.update({
-      where: { id: driverProfile.id },
-      data: { status: i === 2 ? 'ON_TRIP' : 'EN_ROUTE' },
-    });
-  }
-
-  // Pending ride requests
+  // 7. Create Sample Ride Requests
   console.log('📝 Creating sample ride requests...');
-  const waitingGuests = await prisma.guestProfile.findMany({
-    where: { status: 'WAITING' },
-    take: 3,
-  });
+  for (let i = 15; i < 18; i++) {
+    const guest = guests[i];
+    const hotel = accommodations[i % accommodations.length];
 
-  for (const guest of waitingGuests) {
     await prisma.rideRequest.create({
       data: {
         guestProfileId: guest.id,
-        pickupPoint: DELHI_LOCATIONS.airport.address,
-        dropoffPoint: randomElement(accommodations).address,
-        status: 'PENDING',
+        pickupPoint: LOCATIONS.AIRPORT_T3.address,
+        dropoffPoint: hotel.address,
+        status: i === 15 ? 'PENDING' : 'APPROVED',
       },
     });
   }
-
-  // Print summary
-  const userCount = await prisma.user.count();
-  const guestCount = await prisma.guestProfile.count();
-  const driverCount = await prisma.driverProfile.count();
-  const accCount = await prisma.accommodation.count();
-  const tripCount = await prisma.trip.count();
-  const requestCount = await prisma.rideRequest.count();
 
   console.log('\n✅ Delhi seed complete!\n');
   console.log('📊 Summary:');
   console.log(`   City:           Delhi, India`);
   console.log(`   Venue:          Bharat Mandapam (Pragati Maidan)`);
   console.log(`   Airport:        IGI Airport T3`);
-  console.log(`   Users:          ${userCount} (1 admin + ${driverCount} drivers + ${guestCount} guests)`);
-  console.log(`   Accommodations: ${accCount} (Taj Palace, Leela Palace, ITC Maurya, JW Marriott Aerocity)`);
-  console.log(`   Trips:          ${tripCount}`);
-  console.log(`   Ride Requests:  ${requestCount}`);
-  console.log('\n🔑 Login credentials:');
+  console.log(`   Users:          ${1 + drivers.length + guests.length} (1 admin + ${drivers.length} drivers + ${guests.length} guests)`);
+  console.log(`   Accommodations: ${accommodations.length} (Taj Palace, Leela Palace, ITC Maurya, JW Marriott Aerocity)`);
+  console.log(`   Trips:          7`);
+  console.log(`   Ride Requests:  3\n`);
+  console.log('🔑 Login credentials:');
   console.log('   Admin:  admin@tbs.event / admin123');
   console.log('   Driver: driver1@tbs.event / driver123 (through driver15)');
-  console.log('   Guest:  guest1@tbs.event / guest123 (through guest50)');
+  console.log('   Guest:  guest1@tbs.event / guest123 (through guest50)\n');
 }
 
 main()
   .catch((e) => {
-    console.error('Seed error:', e);
+    console.error('❌ Seeding error:', e);
     process.exit(1);
   })
   .finally(async () => {

@@ -14,7 +14,7 @@ export async function GET(request: Request) {
           user: { select: { id: true, name: true, email: true, phone: true, role: true } },
           accommodation: true,
         },
-        orderBy: { arrivalEta: 'asc' },
+        orderBy: { createdAt: 'desc' },
       });
 
       return NextResponse.json({ success: true, data: guests });
