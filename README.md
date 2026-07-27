@@ -1,101 +1,133 @@
 # TBS — Event Transport Dispatch & Royal Hospitality Platform
 
-A mobile-first dispatch and hospitality platform automating vehicle logistics for large-scale group events (weddings, summits, VIP delegations). Built for a single-event private fleet of 10–100 drivers and hundreds of arriving guests in **Delhi, India** (Bharat Mandapam, DEL T3, luxury hotel partners).
+A mobile-first dispatch and hospitality platform automating vehicle logistics for large-scale group events (weddings, conferences, corporate summits). Built for a single-event private fleet of 10–100 drivers and hundreds of arriving guests in Delhi, India (Bharat Mandapam, DEL T3, NDLS, ANVT, and partner hotels).
 
 ---
 
-## 👑 The Bride Side — Royal Luxury Aesthetic
+## System Overview & Problem Statement
 
-The platform features a custom design system styled for **The Bride Side**, a luxury Indian wedding planning brand:
-- **Color Palette**: Royal Velvet Crimson (`#7A1325`, `#5B0E1A`), Imperial Gold (`#D4AF37`, `#E5C158`), and Warm Silk Ivory (`#FFFDF9`).
-- **Typography**: Elegant Playfair Display (Serif headings) and Inter (Sans-serif body text).
-- **Aceternity UI Components**: `Spotlight` ambient glow effects, `GlowingCard` gradient border hover cards, and `BentoGrid` modular showcases.
+Large group events require coordinating complex vehicle logistics: picking guests up from airports and railway stations, dropping them at accommodations, and moving them between accommodations and the event venue over the course of the event. Manually coordinating this — matching drivers to guests, tracking arrivals, managing peak-hour surges, and avoiding both guest waiting time and idle vehicles — is error-prone and does not scale.
+
+This system automates coordination: assigning available drivers to guests intelligently in real time based on location, timing, vehicle capacity, and traffic conditions — similar in spirit to ride-hailing apps, but adapted for the fixed, scheduled, multi-stop nature of a private group event.
 
 ---
 
-## 🏗️ High-Level Architecture
+## System Architecture
 
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        GA["Guest Concierge<br/>(Mobile Web PWA)"]
-        AP["Operations Center<br/>(Admin Dashboard)"]
-        DC["Driver Console<br/>(Chauffeur Web App)"]
-    end
-
-    subgraph "API & Gateway Layer"
-        GW["Next.js 14 App Router<br/>+ Server-Sent Events (SSE)"]
-    end
-
-    subgraph "Core Engines & Logic"
-        MATCH["Matching Engine<br/>(Hungarian + Greedy + Pooling)"]
-        STARVE["Anti-Starvation Engine<br/>(Priority Scoring)"]
-        MAPS["Maps & Routing<br/>(OpenRouteService + Haversine)"]
-        CACHE["2-Tier Distance Cache<br/>(In-Memory + DB Cache)"]
-    end
-
-    subgraph "Data & Persistence Layer"
-        PRISMA["Prisma ORM"]
-        DB[("SQLite / PostgreSQL<br/>(dev.db / Prod DB)")]
-    end
-
-    GA --> GW
-    AP --> GW
-    DC --> GW
-    GW --> MATCH
-    GW --> STARVE
-    MATCH --> MAPS
-    MAPS --> CACHE
-    GW --> PRISMA
-    PRISMA --> DB
+```
++-----------------------------------------------------------------------------------+
+|                                 CLIENT LAYER                                      |
+|  +------------------------+  +--------------------------+  +-------------------+  |
+|  |    Guest Concierge     |  |    Operations Center     |  |  Chauffeur Console|  |
+|  |   (Mobile-First PWA)   |  |     (Admin Role)         |  |   (Driver Role)   |  |
+|  +-----------+------------+  +------------+-------------+  +---------+---------+  |
++--------------|----------------------------|--------------------------|------------+
+               |                            |                          |
+               +--------------------+-------+--------------------------+
+                                    |
++-----------------------------------|-----------------------------------------------+
+|                            API & GATEWAY LAYER                                    |
+|                   Next.js 14 App Router + Server-Sent Events                      |
++-----------------------------------|-----------------------------------------------+
+                                    |
++-----------------------------------|-----------------------------------------------+
+|                            CORE ENGINES & LOGIC                                   |
+|  +------------------------+  +--------------------------+  +-------------------+  |
+|  |     Matching Engine    |  |  Anti-Starvation Engine  |  |  Distance Cache   |  |
+|  |  (Hungarian + Greedy)  |  |   (Priority Scoring)     |  | (2-Tier Memory/DB)|  |
+|  +------------------------+  +--------------------------+  +-------------------+  |
++-----------------------------------|-----------------------------------------------+
+                                    |
++-----------------------------------|-----------------------------------------------+
+|                         DATA & PERSISTENCE LAYER                                  |
+|                         Prisma ORM + SQLite / PostgreSQL                          |
++-----------------------------------------------------------------------------------+
 ```
 
 ---
 
-## ⚡ Matching Engine & Algorithm Specs
+## Architectural Trade-offs & Design Choices
+
+### 1. Why WebSockets Were Not Used (Server-Sent Events vs. WebSockets)
+* **Technical Constraint**: WebSockets require a stateful, persistent, always-on TCP connection server (such as a standalone Node.js server or custom Socket.IO daemon). Serverless deployment platforms like Vercel execute API routes as ephemeral, stateless functions that spin up on demand and shut down after processing each request. Serverless environments cannot hold open persistent bidirectional TCP WebSocket connections without expensive third-party proxy addons.
+* **Design Decision**: Implemented Server-Sent Events (SSE) for real-time map updates and status streams (`/api/events/stream`, `/api/events/admin-stream`, `/api/events/driver-stream`). SSE operates over standard HTTP/2 streaming, which is 100% compatible with Vercel serverless infrastructure. State mutations (accepting trips, updating location, submitting ride requests) are handled via standard HTTP POST/PATCH endpoints, while client state is kept synchronized through unidirectional SSE streams with automatic reconnection handling.
+
+### 2. Mobile Deployment: Web App (PWA) vs. Standalone React Native Native Binaries
+* **Trade-off & Limitation**: Hosting live links for native mobile binaries (.apk for Android / .ipa for iOS) is not possible on web deployment platforms like Vercel.
+* **Design Decision**: Built as a responsive, mobile-first Web Application (Progressive Web App) to enable instant browser access across guest and driver devices without requiring App Store installation during a single-weekend event. The frontend architecture is modular and ready to be compiled into React Native (Expo) native binaries or wrapped using Capacitor if native device binaries are required.
+
+### 3. Distance Matrix Caching: 2-Tier In-Memory/Database vs. External Redis
+* **Trade-off**: Standalone Redis clusters introduce external infrastructure dependencies for local testing.
+* **Design Decision**: Built a 2-tier caching layer (Tier 1: In-memory JavaScript Map for sub-millisecond lookups; Tier 2: Prisma database caching for persistence). This achieves a verified 212x speedup over raw routing API calls while keeping local setup zero-dependency. An Upstash Redis adapter (`@upstash/redis`) can be plugged in for multi-region serverless deployments.
+
+### 4. Routing Engine: OpenRouteService & Haversine vs. Commercial APIs
+* **Trade-off**: Commercial map APIs incur strict rate limits and quota costs during bulk matrix calculations.
+* **Design Decision**: OpenRouteService generates road driving polylines and route durations, backed by an automated Haversine matrix calculator fallback to guarantee 100% routing uptime during peak scenario testing.
+
+### 5. Aesthetic & Theme Engine: The Bride Side Visual Design
+* **Design Decision**: Emulated the visual identity of "The Bride Side" brand: Royal Velvet Crimson (`#7A1325`, `#5B0E1A`), Imperial Gold (`#D4AF37`), and Warm Silk Ivory (`#FFFDF9`), built with custom Aceternity glassmorphism cards (`GlowingCard`), background spotlights (`Spotlight`), and modular showcases (`BentoGrid`).
+
+---
+
+## Matching & Dispatch Engine Specifications
 
 The system combines three dispatch strategies to balance operational efficiency and guest satisfaction:
 
-### 1. Pre-Day Batch Dispatch ($O(N^3)$ Hungarian Solver)
-* **Algorithm**: Bipartite Matching via the Hungarian Algorithm (`src/lib/matching/hungarian.ts`).
-* **Use Case**: Scheduled flight/train arrival batches known in advance.
-* **Cost Matrix**:
-  $$C_{i,j} = w_1 \cdot d(g_i, d_j) + w_2 \cdot |t_{g_i} - t_{d_j}| + w_3 \cdot \text{WaitTime}(g_i)$$
-* **Objective**: Find the global minimum total travel & wait time for all assigned pairs.
+### 1. Pre-Day Batch Dispatch (Hungarian Algorithm - O(N^3))
+* **Implementation**: Bipartite Matching via the Hungarian Algorithm (`src/lib/matching/hungarian.ts`).
+* **Use Case**: Scheduled flight and train arrival batches known prior to event day.
+* **Objective**: Minimizes the global cost matrix combining travel distance, arrival time differences, and guest wait times:
+  Cost = w1 * Distance(Guest, Driver) + w2 * |ArrivalETA - DriverReadyTime| + w3 * WaitTime
 
-### 2. Real-Time On-Demand Dispatch (Greedy Nearest-Neighbor)
-* **Algorithm**: Low-latency greedy heuristic (`src/lib/matching/greedy.ts`).
-* **Use Case**: Ad-hoc guest ride requests submitted during the event.
-* **Selection Metric**: Evaluates available drivers by proximity, vehicle seating capacity, and luggage capacity.
+### 2. Real-Time On-Demand Dispatch (Greedy Near-Neighbor)
+* **Implementation**: Low-latency greedy heuristic (`src/lib/matching/greedy.ts`).
+* **Use Case**: Ad-hoc guest ride requests submitted during the event and approved by operations.
+* **Selection Metric**: Filters available drivers by seat and luggage capacity, selecting the optimal driver by real-time distance.
 
 ### 3. Multi-Guest Pooling & Detour Constraints
-* **Algorithm**: Pooling Engine (`src/lib/matching/pooling.ts`).
+* **Implementation**: Pooling Engine (`src/lib/matching/pooling.ts`).
 * **Constraints Enforced**:
-  * Vehicle capacity limit: $\sum \text{GroupSize}_k \le \text{SeatCapacity}_{\text{driver}}$
-  * Maximum allowable detour time: $\Delta T_{\text{detour}} \le 15\text{ minutes}$
-  * Maximum total delay for any guest: $T_{\text{delay}} \le 20\text{ minutes}$
+  * Vehicle capacity limit: Sum of GroupSizes <= Driver.SeatCapacity
+  * Luggage capacity limit: Sum of LuggageCounts <= Driver.LuggageCapacity
+  * Maximum allowable detour insertion time: Delta Detour <= 15 minutes
+  * Maximum total delay for any guest: Total Delay <= 20 minutes
 
 ### 4. Anti-Starvation Mechanism
-* **Algorithm**: Priority Queue Engine (`src/lib/matching/priorityQueue.ts`).
-* **Formula**:
-  $$S(g) = w_1 \cdot T_{\text{wait}} + w_2 \cdot T_{\text{flight\_delay}} - w_3 \cdot D_{\text{detour}}$$
-* **Guarantee**: Prevents guests in low-density pickup zones from being repeatedly bypassed by closer arrivals.
+* **Implementation**: Priority Queue Engine (`src/lib/matching/priorityQueue.ts`).
+* **Priority Formula**:
+  Priority Score = w1 * WaitTime + w2 * FlightDelayTime - w3 * DetourPenalty
+* **Guarantee**: Escalates priority for guests in low-density pickup points, preventing them from being indefinitely bypassed by closer arrivals.
 
 ---
 
-## 📐 Design Choices & Technical Trade-offs
+## Scope & Functional Requirements
 
-| Domain | Selected Architecture | Alternative Considered | Engineering Rationale & Trade-off |
-|---|---|---|---|
-| **Frontend Framework** | Next.js 14 App Router (Responsive PWA) | React Native (Expo Native Apps) | **Choice**: Next.js mobile-first PWA for zero-install instant browser access across iOS and Android guests during a single weekend event. Avoids app store approval delays. |
-| **Real-Time Streaming** | Server-Sent Events (SSE) | WebSockets (Socket.IO) | **Choice**: SSE streams real-time map positions and status updates over standard HTTP/2, providing full compatibility with Vercel serverless deployments without requiring persistent proxy servers. |
-| **Distance Caching** | 2-Tier In-Memory + Prisma DB Cache | Standalone Redis Cluster | **Choice**: 2-tier caching delivers sub-millisecond lookups locally with zero external server dependencies, achieving a verified $212\times$ API speedup. Upstash Redis `@upstash/redis` can be plugged in for multi-region scale. |
-| **Routing Provider** | OpenRouteService + Haversine Fallback | Google Maps Distance Matrix API | **Choice**: OpenRouteService provides free open-source road network routing and polyline generation, backed by a Haversine distance matrix fallback for 100% offline uptime guarantee. |
-| **Aesthetics** | The Bride Side Luxury Wedding Theme | Standard Generic UI | **Choice**: Custom royal velvet crimson & imperial gold palette with Aceternity UI components (`Spotlight`, `GlowingCard`, `BentoGrid`) creating a premium wedding concierge feel. |
+### 1. Guest App (`/guest`)
+* **Registration & Details**: View flight/train arrival details, pickup point, and assigned accommodation.
+* **Automatic Notification**: Receives automatic notification upon driver match containing driver name, vehicle number, and live ETA (no driver browsing or selection).
+* **Live Driver Tracking**: Interactive map displaying real-time driver coordinates and route ETA (`/guest/track`).
+* **On-Demand Ride Requests**: Raise unscheduled ride requests from the app (`/guest/request`), which transition to a "Request Pending" state awaiting admin review.
+* **Travel Profile Editor**: Update party size, luggage count, and flight arrival information (`/guest/profile`).
+
+### 2. Admin Portal — Admin/Operations Role (`/admin`)
+* **Fleet Dashboard**: Real-time Leaflet map rendering driver locations, trip statuses, and operational metrics (`/admin/dashboard`).
+* **Ride Request Queue**: Review, approve, or decline guest-submitted ride requests (`/admin/requests`). Approval triggers automated matching dispatch.
+* **Driver Onboarding**: Manually register pre-approved drivers, vehicle plates, model specs, and seat/luggage capacities (`/admin/drivers`).
+* **Guest Directory**: Manage guest travel profiles and manually assign drivers (`/admin/guests`).
+* **Manual Override**: Override automated driver assignments in edge cases such as vehicle breakdown or priority escort (`/admin/trips`).
+* **Batch Optimization Console**: Execute pre-day Hungarian batch solver rounds (`/admin/batch`).
+
+### 3. Admin Portal — Driver Role (`/driver`)
+* **Role-Based Access**: Single portal codebase supporting driver credentials with isolated views.
+* **Trip Card Management**: View assigned trip details one at a time (pickup, guest name, count, destination). Drivers cannot browse the full guest queue or view other drivers.
+* **Accept / Reject Workflow**: Drivers can accept or reject assigned trips. Rejection re-queues the guest for automated reassignment (`/driver/dashboard`).
+* **Status Progression**: Update trip status (`DRIVER_EN_ROUTE` -> `DRIVER_ARRIVED` -> `IN_PROGRESS` -> `COMPLETED`) to calculate halt and free times (`/driver/trip`).
+* **Continuous Location Sharing**: Live geolocation tracked and pushed to SSE streams during active trips (`useLocation.ts`).
+* **Rest Break Timer**: Drivers can select 15, 30, or 45-minute rest breaks. The matching engine holds new assignments until the break completes (`/driver/break`).
 
 ---
 
-## 📍 Event Locations (Delhi, India Setup)
+## Event Setup & Locations (Delhi, India)
 
 * **Event Venue**: Bharat Mandapam (Pragati Maidan).
 * **Arrival Hubs**:
@@ -110,36 +142,13 @@ The system combines three dispatch strategies to balance operational efficiency 
 
 ---
 
-## 👥 Role-Based Portals
-
-### 1. Guest Concierge (`/guest`)
-- On-demand transfer request form (pickup & dropoff selection).
-- Real-time driver map tracking via SSE (`/guest/track`).
-- Travel itinerary profile editor (flight number, group size, luggage count).
-- Complete transfer history archive.
-
-### 2. Operations Center (`/admin`)
-- Fleet Overview Map ([AdminFleetMap.tsx](file:///c:/Users/abhis/Desktop/TBS/src/components/maps/AdminFleetMap.tsx)) rendering live Leaflet vehicle markers and active routes.
-- Guest ride request approval queue with one-click dispatch trigger.
-- Guest & Chauffeur directories with manual assignment overrides.
-- Pre-day Hungarian batch optimization solver console.
-- Accommodation lodging manager.
-
-### 3. Royal Chauffeur Console (`/driver`)
-- Trip card assignment with accept/reject capability.
-- Active navigation view with status progression (`DRIVER_EN_ROUTE` $\rightarrow$ `DRIVER_ARRIVED` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `COMPLETED`).
-- Automatic continuous geolocation tracker (`useLocation.ts`).
-- Rest break timer (15, 30, 45 mins) holding new dispatches.
-
----
-
-## 🛠️ Getting Started & Local Development
+## Local Setup & Execution Guide
 
 ### Prerequisites
-- Node.js v18+ 
-- npm v9+
+* Node.js v18+
+* npm v9+
 
-### Installation & Database Setup
+### Commands
 ```bash
 # 1. Install dependencies
 npm install
@@ -147,52 +156,46 @@ npm install
 # 2. Push database schema (SQLite dev environment)
 npx prisma db push
 
-# 3. Seed test data (50 guests, 15 drivers, 4 luxury hotels, Delhi coordinates)
+# 3. Seed test dataset (50 guests, 15 drivers, 4 hotels, Delhi coordinates)
 npx tsx prisma/seed.ts
 
-# 4. Start local development server
+# 4. Run local development server
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`.
+Application will run locally at `http://localhost:3000`.
 
-### Demo Credentials
+### Demo User Accounts
 
-| Role | Email | Password | Target View |
+| Role | Email | Password | Access Route |
 |---|---|---|---|
-| **Admin Operations** | `admin@tbs.event` | `admin123` | `/admin/dashboard` |
-| **Driver Chauffeur** | `driver1@tbs.event` | `driver123` | `/driver/dashboard` |
-| **Guest** | `guest1@tbs.event` | `guest123` | `/guest/dashboard` |
+| Admin Operations | `admin@tbs.event` | `admin123` | `/admin/dashboard` |
+| Driver / Chauffeur | `driver1@tbs.event` | `driver123` | `/driver/dashboard` |
+| Guest | `guest1@tbs.event` | `guest123` | `/guest/dashboard` |
 
 ---
 
-## 🧪 Simulation & Verification Scripts
+## Verification & Simulation Scripts
 
 ```bash
-# Run TypeScript type check
+# TypeScript Type Check
 npx tsc --noEmit
 
-# Run Maps & Routing Infrastructure Verification
+# Maps & Routing Infrastructure Verification
 npx tsx src/lib/maps/testMaps.ts
 
-# Run Peak Arrival Window Simulation Test
+# Peak Arrival Scenario Simulation
 npx tsx src/lib/simulation/testPeakScenario.ts
 
-# Verify Production Build
+# Production Build Verification
 npm run build
 ```
 
 ---
 
-## 📄 Deployment
+## Production Deployment
 
-The project is configured for one-click deployment on **Vercel** via `vercel.json`:
-- API routes configured with serverless function timeouts.
-- Dynamic route headers configured with `export const dynamic = 'force-dynamic'`.
-- Static prerendering boundaries configured with React `<Suspense>`.
-
----
-
-## 📜 License
-
-Distributed under the ISC License. Built for **The Bride Side — Royal Event Transport & Hospitality Concierge**.
+The platform is configured for deployment on Vercel via `vercel.json`:
+* API routes configured with serverless timeouts.
+* Dynamic headers configured with `export const dynamic = 'force-dynamic'`.
+* Prerendering boundaries configured with React `<Suspense>`.
